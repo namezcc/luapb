@@ -47,8 +47,8 @@ local tab = {
 	{per = 10,id = 9},
 }
 
-local rand = RandomBox:new()
+--local rand = RandomBox:new()
 
-for k,v in pairs(nil) do
-	
-end
+
+
+

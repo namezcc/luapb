@@ -52,7 +52,4 @@ GM_tool.chick = function (playerinfo,str)
 	return false
 end
 
---local str = "gm money add "
---GM_tool.chick("1",str)
-
 return GM_tool
