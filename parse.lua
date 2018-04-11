@@ -77,8 +77,16 @@ function Lex:eof()
 end
 
 function Lex:quote()
-	local w = self:test("\"[%w_]*\"")
+	local q = self:test("[\"\']")
+	if not q then
+		self:error "error quote"
+	end
+	local w = self:test("[%w_]*")
 	if not w then
+		self:error "error quote"
+	end
+	local q2 = self:test("[\"\']")
+	if not q2 then
 		self:error "error quote"
 	end
 	return w
@@ -469,7 +477,7 @@ local function CreateField(msg,tname,fname,idx,rept)
 end
 
 function Parse:ParseFile(filename)
-	if self.loadFile[file] then
+	if self.loadFile[filename] then
 		return
 	end
 
@@ -498,15 +506,23 @@ function Parse:ParseContent(lex)
 			self:ParseMessage(lex)
 		elseif keyword == "enum" then
 			self:ParseEnum(lex)
+		elseif keyword == "import" then
+			self:ImportFile(lex)
 		else
 			lex:error "error keyword"
 		end
 	end
 end
 
+function Parse:ImportFile(lex)
+	local filename = lex:quote()
+	self:ParseFile(filename)
+	lex:line_end()
+end
+
 function Parse:ParseSyntax(lex)
 	lex:expected("=")
-	if lex:quote() ~= '"proto3"' then
+	if lex:quote() ~= 'proto3' then
 		lex:error "just support proto3"
 	end
 	lex:line_end()
@@ -549,9 +565,6 @@ function Parse:ParseMsgBody(lex,mname)
 			CreateField(msg,ktype,kname,knum,true)
 			lex:line_end()
 		else
-			if not TypeWriteType[keyword] and not self.message[keyword] then
-				lex:error "error Type"
-			end
 			local kname = lex:keyword()
 			lex:expected("=")
 			local knum = lex:integer()
