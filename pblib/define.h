@@ -9,7 +9,7 @@ enum Stream_Type
 	S_DECODE,
 };
 
-struct OutPutStream
+typedef struct
 {
 	char* buf;
 	int len;
@@ -19,7 +19,7 @@ struct OutPutStream
 	int curLimit;
 	bool hashNextTag;
 	int type;
-};
+}OutPutStream;
 
 union LittleEndian
 {

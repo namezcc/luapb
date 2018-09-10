@@ -1,4 +1,4 @@
-local pb = require "pb"
+pb = require "pb"
 
 local Lex = class()
 function Lex:ctor(str)
@@ -63,7 +63,7 @@ function Lex:test(pat)
 end
 
 function Lex:line_end()
-	local p = self "^%s*;[%s\n]*()"
+	local p = self "[^;]*;[%s\n]*()"
 	if not p then
 		self:error "';' expected"
 	end
@@ -108,7 +108,7 @@ function Lex:keyword()
 end
 
 function Lex:integer()
-	local n = self:test("%d*")
+	local n = self:test("%d+")
 	if not n then
 		self:error "error number"
 	end
@@ -143,6 +143,19 @@ local TypeWriteType = {
 	double = 1,
 	string = 2,
 	bytes = 2,
+	enum = 0,
+}
+
+local TypeDefaultValue = {
+	int32 = 0,
+	uint32 = 0,
+	int64 = 0,
+	uint64 = 0,
+	bool = 0,
+	float = 0.0,
+	double = 0.0,
+	string = "",
+	bytes = "",
 	enum = 0,
 }
 
@@ -295,6 +308,9 @@ end
 local function decodeT(T,stream,t)
 	local index = 1
 	local num = #T.fields
+	for i,f in ipairs(T.fields) do
+		t[f.fname] = f.defaultValue
+	end
 	while(true)
 	do
 		local tag = pb.rTag(stream)
@@ -391,6 +407,7 @@ function Field:ctor(tname,fname,idx,rept)
 	self.rept = rept
 	local wt = GetWriteType(tname,rept)
 	self.tag = idx*8+wt
+	self.defaultValue = TypeDefaultValue[tname]
 	self.tagSize = pb.sizeInt(self.tag)
 	self.packted = IsPackted(tname,wt)
 	local sizefunc = TypeSizeFunc[tname] or function(v) return ComputeMessageSize(tname,v) end
@@ -440,15 +457,15 @@ local function CreateMessage(enum)
 	msg.enum = enum
 	msg.subT = {}
 	msg.fields = {}
-	msg.calcSize = function(self)
-		return calcSizeT(msg,self)
+	msg.calcSize = function(data)
+		return calcSizeT(msg,data)
 	end
 
-	msg.encode = function(self)
-		local size = msg.calcSize(self)
+	msg.encode = function(data)
+		local size = msg.calcSize(data)
 		local s = pb.newStream(size)
-		msg.encodeValue(s,self)
-		return pb.toStringbyte(s)
+		msg.encodeValue(s,data)
+		return s
 	end
 
 	msg.encodeValue = function(stream,val)
@@ -476,13 +493,17 @@ local function CreateField(msg,tname,fname,idx,rept)
 	return f
 end
 
+function Parse:SetProtoPath(path)
+	self.proPath = path
+end
+
 function Parse:ParseFile(filename)
 	if self.loadFile[filename] then
 		return
 	end
 
-	local file = io.open(filename,"r")
-	local content = io.read("*a")
+	local file = io.open(self.proPath..filename,"r")
+	local content = file:read("*a")
 	io.close(file)
 	local lex = Lex.new(content)
 	self.loadFile[file] = true
@@ -596,10 +617,34 @@ function Parse:ParseEnum(lex)
 	do
 		local estr = lex:keyword()
 		lex:expected("=")
+		msg[estr] = lex:integer()
 		lex:line_end()
 	end
 	lex:expected("}")
 	self.message[ename] = msg
+end
+
+function Parse:NewMsg( msgName )
+	return self.message[msgName].new()
+end
+
+function Parse:EncodeToString(msgName,data)
+	local s = self.message[msgName].encode(data)
+	local str = pb.toStringbyte(s)
+	pb.clearStream(s)
+	return str
+end
+
+function Parse:EncodeToStream(msgName,data)
+	return self.message[msgName].encode(data)
+end
+
+function Parse:clearStream( s )
+	if s then pb.clearStream(s) end
+end
+
+function Parse:DecodeToObject( msgName,str )
+	return self.message[msgName].decode(str)
 end
 
 return Parse

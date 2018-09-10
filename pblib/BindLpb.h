@@ -88,15 +88,24 @@ static OutPutStream* pb_getStream(lua_State* L)
 
 static int pb_clearStream(lua_State* L)
 {
-	OutPutStream* s = pb_getStream(L);
+	OutPutStream** ud = (OutPutStream**)luaL_checkudata(L, 1,"OutPutStream");
+	if (ud == NULL)
+	{
+		luaL_error(L, "pb Stream is nil");
+		return 0;
+	}
+	//OutPutStream** 
+	OutPutStream* s = *ud;
 	if (s)
 	{
-		if (s->buf && s->type==S_ENCODE)
+		if (s->buf)
 		{
-			delete s->buf;
-			s->buf = nullptr;
+			if(s->type==S_ENCODE)
+				free(s->buf);
+			s->buf = NULL;
 		}
-		//delete s; ÓÉ __gc Ïú»Ù
+		free(s); //
+		*ud = NULL;
 	}
 	return 0;
 }
@@ -125,7 +134,7 @@ static int pb_fromString(lua_State* L)
 	const char* buf = lua_tolstring(L, 1, &len);
 
 	OutPutStream** udata = (OutPutStream**)lua_newuserdata(L, sizeof(OutPutStream*));
-	*udata = new OutPutStream();
+	*udata = (OutPutStream*)malloc(sizeof(OutPutStream));
 	luaL_getmetatable(L, "OutPutStream");
 	lua_setmetatable(L, -2);
 	OutPutStream* pbstream = *udata;
@@ -143,16 +152,15 @@ static int pb_fromString(lua_State* L)
 static int pb_newStream(lua_State* L)
 {
 	int len = lua_tointeger(L, 1);
-	printf("stream len %d\n", len);
 	if (len == 0)
 		return 0;
 
 	OutPutStream** udata = (OutPutStream**)lua_newuserdata(L, sizeof(OutPutStream*));
-	*udata = new OutPutStream();
+	*udata = (OutPutStream*)malloc(sizeof(OutPutStream));
 	luaL_getmetatable(L, "OutPutStream");
 	lua_setmetatable(L, -2);
 	OutPutStream* pbstream = *udata;
-	pbstream->buf = new char[len];
+	pbstream->buf = (char*)malloc(len);
 	pbstream->pos = 0;
 	pbstream->len = len;
 	pbstream->curLimit = len;
@@ -251,7 +259,7 @@ static int pb_rTag(lua_State* L)
 	if (!pbstream)
 		return 0;
 	uint32_t v;
-	ReadTag(pbstream, v);
+	ReadTag(pbstream, &v);
 	lua_pushinteger(L, v);
 	return 1;
 }
@@ -262,7 +270,7 @@ static int pb_rInt(lua_State* L)
 	if (!pbstream)
 		return 0;
 	int v;
-	ReadInt32(pbstream, v);
+	ReadInt32(pbstream, &v);
 	lua_pushinteger(L, v);
 	return 1;
 }
@@ -273,7 +281,7 @@ static int pb_rInt64(lua_State* L)
 	if (!pbstream)
 		return 0;
 	int64_t v;
-	ReadInt64(pbstream, v);
+	ReadInt64(pbstream, &v);
 	lua_pushinteger(L, v);
 	return 1;
 }
@@ -284,7 +292,7 @@ static int pb_rUint(lua_State* L)
 	if (!pbstream)
 		return 0;
 	uint32_t v;
-	ReadUInt32(pbstream, v);
+	ReadUInt32(pbstream, &v);
 	lua_pushinteger(L, v);
 	return 1;
 }
@@ -295,7 +303,7 @@ static int pb_rUint64(lua_State* L)
 	if (!pbstream)
 		return 0;
 	uint64_t v;
-	ReadUInt64(pbstream, v);
+	ReadUInt64(pbstream, &v);
 	lua_pushinteger(L, v);
 	return 1;
 }
@@ -306,7 +314,7 @@ static int pb_rDouble(lua_State* L)
 	if (!pbstream)
 		return 0;
 	double v;
-	ReadDouble(pbstream, v);
+	ReadDouble(pbstream, &v);
 	lua_pushnumber(L, v);
 	return 1;
 }
@@ -317,7 +325,7 @@ static int pb_rFloat(lua_State* L)
 	if (!pbstream)
 		return 0;
 	float v;
-	ReadFloat(pbstream, v);
+	ReadFloat(pbstream, &v);
 	lua_pushnumber(L, v);
 	return 1;
 }
@@ -328,7 +336,7 @@ static int pb_rBool(lua_State* L)
 	if (!pbstream)
 		return 0;
 	int v;
-	ReadInt32(pbstream, v);
+	ReadInt32(pbstream, &v);
 	lua_pushboolean(L, v);
 	return 1;
 }
@@ -340,7 +348,7 @@ static int pb_rString(lua_State* L)
 		return 0;
 	int v;
 	char* s=NULL;
-	ReadString(pbstream, s,v);
+	ReadString(pbstream, &s,&v);
 	if (s)
 	{
 		lua_pushlstring(L, s, v);
@@ -357,7 +365,7 @@ static int PeekTag(OutPutStream* str)
 		return str->nextTag;
 	}
 	uint32_t tag;
-	ReadTag(str, tag);
+	ReadTag(str, &tag);
 	int saveLast = str->lastTag;
 	str->nextTag = tag;
 	str->hashNextTag = true;
